@@ -1,0 +1,28 @@
+# data.yaml
+
+datasets:
+  train:
+    image_dir: ./coco_10p/train
+    ann_path: ./coco_10p/annotations/captions_train2017.json
+
+  val:
+    image_dir: ./coco_10p/val
+    ann_path: ./coco_10p/annotations/captions_val2017.json
+
+  test:
+    image_dir: ./coco_10p/test
+    ann_path: null
+
+transform:
+  resize: [128, 128]
+  to_tensor: true
+  normalize:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+dataloader:
+  batch_size: 16
+  shuffle: true
+  num_workers: 4
+  pin_memory: true
+  padding_value: 0

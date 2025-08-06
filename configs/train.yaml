@@ -1,0 +1,26 @@
+# train.yaml
+
+num_epochs: 20
+print_every: 1
+save_every: 5
+start_epoch: 0
+device: cuda  
+
+optimizer:
+  type: Adam
+  lr: 0.001
+  weight_decay: 0.0001
+
+scheduler:
+  type: StepLR
+  step_size: 50
+  gamma: 0.5
+
+criterion: CrossEntropyLoss  
+
+save_dir: ./logs
+
+checkpoint_path: null
+
+misc:
+  clip_grad_norm: 5

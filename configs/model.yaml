@@ -1,0 +1,10 @@
+encoder:
+  embed_size: 256
+  backbone:
+    type: "resnet50"
+    pretrained: true
+  
+decoder:
+  embed_size: 256
+  hidden_size: 512
+  num_layers: 1
