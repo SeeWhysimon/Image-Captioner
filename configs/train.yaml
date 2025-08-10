@@ -1,9 +1,8 @@
 # train.yaml
 
-num_epochs: 20
+num_epochs: 10
 print_every: 1
 save_every: 5
-start_epoch: 0
 device: cuda  
 
 optimizer:
@@ -16,11 +15,14 @@ scheduler:
   step_size: 50
   gamma: 0.5
 
-criterion: CrossEntropyLoss  
+criterion: 
+  type: CrossEntropyLoss  
+  ignore_idx: 0 
 
 save_dir: ./logs
 
 checkpoint_path: null
+history_path: null
 
 misc:
   clip_grad_norm: 5

@@ -1,169 +1,123 @@
+import os
+import json
+import argparse
 import torch
 import torch.nn as nn
-import os
-
-import config
 
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import StepLR
-from PIL import Image
+from itertools import chain
 
+from scripts import builder
+from scripts.engine import CaptionCollator, train
 from scripts.data import CocoDataset
-from scripts.vocabulary import Vocabulary
-from scripts.utils import (build_transform,
-                           create_new_exp_folder,
-                           extract_from_coco,
-                           generate_captions,
-                           load_checkpoint,  
-                           load_configs,
-                           load_history, 
-                           save_history)
-from scripts.engine import CaptionCollator, train, evaluate_bleu
+from scripts.utils import load_configs, load_checkpoint, load_history, create_new_exp_folder, save_history
 from scripts.model import CNNEncoder, RNNDecoder
-from scripts.builder import build_optimizer, build_scheduler
+from scripts.vocabulary import Vocabulary
+
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument("--mode", type=str, default="train", help="Working mode.")
+
+    return parser.parse_args()
 
 if __name__ == "__main__":
-    print(f"🚀 Working on {config.device}...")
+    args = get_args()
+    
+    data_config = load_configs("configs/data.yaml")
+    model_config = load_configs("configs/model.yaml")
 
-    data_cfg = load_configs("configs/data.yaml")
-    model_cfg = load_configs("configs/model.yaml")
-    train_cfg = load_configs("configs/train.yaml")
+    # ============================ train mode ============================
+    if args.mode == "train":
+        # select device
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if config.mode == "train":
-        transform = build_transform(data_cfg["transform"])
-        dataset = CocoDataset(image_dir=data_cfg["datasets"]["train"]["image_dir"], 
-                              ann_path=data_cfg["datasets"]["train"]["ann_path"], 
-                              transform=transform)
-        captions_all = [c for _, c in dataset.samples]
+        # load training configs
+        train_config = load_configs("configs/train.yaml")
+        
+        # build vocabulary and dataset
+        with open(data_config["datasets"]["train"]["ann_path"], "r") as f:
+            data = json.load(f)
+        train_captions = [ann["caption"] for ann in data["annotations"]]
 
-        if train_cfg["checkpoint_path"] and os.path.exists(train_cfg["checkpoint_path"]):
-            print(f"🔁 Loading checkpoint: {train_cfg['checkpoint_path']}")
-            ckpt = load_checkpoint(train_cfg["checkpoint_path"], 
-                                   map_location=train_cfg["device"])
-
-            vocab = ckpt["vocab"]
-            if vocab is None:
-                raise ValueError("❌ Checkpoint 中缺失 vocab, 无法恢复训练")
-
-            start_epoch = ckpt["start_epoch"]
-            exp_path = os.path.dirname(config.checkpoint_path)
-            print(f"📂 Inheritting folder: {exp_path}")
-            history = load_history(exp_path)
+        if train_config["checkpoint_path"]:
+            checkpoint = load_checkpoint(checkpoint_path=train_config["checkpoint_path"], 
+                                         map_location=device)
+            vocab = checkpoint["vocab"]
         else:
             vocab = Vocabulary()
-            vocab.build(captions_all)
-            start_epoch = 0
-            history = []
-            exp_path, _ = create_new_exp_folder(base_dir=config.save_path)
+            vocab.build(train_captions)
 
-        collate = CaptionCollator(vocab, padding_value=data_cfg["dataloader"]["padding_value"])
-        dataloader = DataLoader(
-            dataset,
-            batch_size=data_cfg["dataloader"]["batch_size"],
-            shuffle=data_cfg["dataloader"]["shuffle"],
-            collate_fn=collate,
-            num_workers=data_cfg["dataloader"]["num_workers"],
-            pin_memory=data_cfg["dataloader"]["pin_memory"]
-        )
-
-        encoder = CNNEncoder(model_cfg["encoder"]["embed_size"], 
-                             model_cfg["encoder"]["backbone"]).to(train_cfg["device"])
-        decoder = RNNDecoder(model_cfg["decoder"]["embed_size"], 
-                             model_cfg["decoder"]["hidden_size"], 
-                             len(vocab)).to(train_cfg["device"])
-
-        if config.checkpoint_path and os.path.exists(config.checkpoint_path):
-            encoder.load_state_dict(ckpt["encoder_state_dict"])
-            decoder.load_state_dict(ckpt["decoder_state_dict"])
-
-        param_list = (list(decoder.parameters()) +
-                      list(encoder.backbone[-1].parameters()) +
-                      list(encoder.classifier.parameters()))
-
-        criterion = nn.CrossEntropyLoss(ignore_index=config.padding_idx)
-        optimizer = build_optimizer(train_cfg, param_list)
-        scheduler = build_scheduler(train_cfg, optimizer)
-
-        if config.checkpoint_path and os.path.exists(config.checkpoint_path):
-            if ckpt["optimizer_state_dict"]:
-                optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-            if ckpt["scheduler_state_dict"]:
-                scheduler.load_state_dict(ckpt["scheduler_state_dict"])
-
-        new_history = train(
-            encoder,
-            decoder,
-            dataloader,
-            vocab,
-            optimizer,
-            criterion,
-            scheduler,
-            config.num_epochs,
-            config.print_every,
-            exp_path,
-            config.save_every,
-            start_epoch, 
-            config.device
-        )
-
-        history.extend(new_history)
-        save_history(history, exp_path)
-        print(f"✅ 模型已保存到：{exp_path}")
-    
-    elif config.mode == "evaluate":
-        torch.serialization.add_safe_globals([Vocabulary])
-
-        ckpt = load_checkpoint(config.checkpoint_path, map_location=config.device)
-        vocab = ckpt["vocab"]
-        if vocab is None:
-            raise ValueError("❌ Checkpoint 中未保存 vocab, 无法继续评估")
-
-        encoder = CNNEncoder(config.embed_size, config.backbone).to(config.device)
-        decoder = RNNDecoder(config.embed_size, config.hidden_size, len(vocab)).to(config.device)
-
-        encoder.load_state_dict(ckpt["encoder_state_dict"])
-        decoder.load_state_dict(ckpt["decoder_state_dict"])
-
-        data_root = extract_from_coco(percent=config.percent)
-        image_dir = os.path.join(data_root, "val2017")
-        ann_path = os.path.join(data_root, "annotations", "captions_val2017.json")
-
-        dataset = CocoDataset(image_dir=image_dir, ann_path=ann_path, transform=config.transform)
-        collate = CaptionCollator(vocab, padding_value=config.padding_idx)
-        dataloader = DataLoader(
-            dataset,
-            batch_size=config.batch_size,
-            shuffle=True,
-            collate_fn=collate,
-            num_workers=8,
-            pin_memory=True
-        )
-
-        score = evaluate_bleu(encoder, decoder, dataloader, vocab, config.device)
-        print(f"BLEU-4 score: {score['BLEU-4']:.6f}")
-
-    elif config.mode == "refer":
-        ckpt = load_checkpoint(config.checkpoint_path, map_location=config.device)
+        collator = CaptionCollator(vocab=vocab, 
+                                   padding_value=data_config["dataloader"]["padding_value"])
         
-        vocab = ckpt["vocab"]
-        if vocab is None:
-            raise ValueError("❌ Checkpoint 中未保存 vocab")
+        transform = builder.build_transform(data_config["transform"])
+        train_set = CocoDataset(image_dir=data_config["datasets"]["train"]["image_dir"], 
+                                ann_path=data_config["datasets"]["train"]["ann_path"], 
+                                transform=transform)
+        train_loader = DataLoader(dataset=train_set, 
+                                  batch_size=data_config["dataloader"]["batch_size"], 
+                                  shuffle=data_config["dataloader"]["shuffle"], 
+                                  num_workers=data_config["dataloader"]["num_workers"], 
+                                  collate_fn=collator, 
+                                  pin_memory=data_config["dataloader"]["pin_memory"])
 
-        encoder = CNNEncoder(config.embed_size, backbone=config.backbone).to(config.device)
-        decoder = RNNDecoder(config.embed_size, config.hidden_size, len(vocab)).to(config.device)
+        # build models
+        encoder = CNNEncoder(embed_size=model_config["encoder"]["embed_size"], 
+                             backbone=model_config["encoder"]["backbone"]["type"]).to(device)
+        decoder = RNNDecoder(embed_size=model_config["decoder"]["embed_size"], 
+                             hidden_size=model_config["decoder"]["hidden_size"], 
+                             vocab_size=len(vocab), 
+                             num_layers=model_config["decoder"]["num_layers"])
+        
+        if train_config["checkpoint_path"]:
+            encoder.load_state_dict(checkpoint["encoder"])
+            decoder.load_state_dict(checkpoint["decoder"])
 
-        encoder.load_state_dict(ckpt["encoder_state_dict"])
-        decoder.load_state_dict(ckpt["decoder_state_dict"])
+        trainable_params = list(filter(lambda p: p.requires_grad, 
+                                       chain(encoder.parameters(), decoder.parameters())))
+        
+        criterion = builder.build_criterion(cfg=train_config)
+        optimizer = builder.build_optimizer(cfg=train_config, 
+                                            model_or_params=trainable_params)
+        scheduler = builder.build_scheduler(cfg=train_config, 
+                                            optimizer=optimizer)
+        
+        if train_config["checkpoint_path"]:
+            optimizer.load_state_dict(checkpoint["optimizer"])
+            scheduler.load_state_dict(checkpoint["scheduler"])
+        
+        history = load_history(train_config["history_path"])
 
-        encoder.eval()
-        decoder.eval()
+        # prepare save folder
+        start_epoch = checkpoint["epoch"] if train_config["checkpoint_path"] else 0
 
-        image = Image.open(config.images).convert("RGB")
-        image = config.transform(image).unsqueeze(0).to(config.device)
+        save_path = create_new_exp_folder(base_dir=train_config["save_dir"], 
+                                          mode=args.mode)
+        
+        # start training
+        new_history = train(encoder=encoder, 
+                            decoder=decoder, 
+                            dataloader=train_loader, 
+                            vocab=vocab, 
+                            optimizer=optimizer, 
+                            criterion=criterion, 
+                            scheduler=scheduler, 
+                            num_epochs=train_config["num_epochs"], 
+                            print_every=train_config["print_every"], 
+                            save_path=save_path, 
+                            save_every=train_config["save_every"], 
+                            start_epoch=start_epoch, 
+                            clip_params=trainable_params, 
+                            clip_max_norm=train_config["misc"]["clip_grad_norm"], 
+                            device=device, 
+                            history=history)
+        
+        save_history(history=new_history, save_path=save_path)
 
-        result = generate_captions(encoder, decoder, image, vocab, config.max_len, config.device)
-        print("Captions:")
-        print(result)
+    elif args.mode == "test":
+        pass
 
     else:
-        print("❌ Mode unsupported.")
+        print(f"Unsupported mode: {args.mode}.")

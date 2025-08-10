@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torchvision.transforms as transforms
 
 def build_transform(cfg):
@@ -19,8 +20,22 @@ def build_transform(cfg):
 
     return transforms.Compose(transform_list)
 
+def build_criterion(cfg):
+    criterion_cfg = cfg.get("criterion", {})
 
-def build_optimizer(cfg, model):
+    # criterion type
+    criterion_type = criterion_cfg.get("type", "CrossEntropyLoss")
+
+    # criterion ignore_index
+    PAD_IDX = cfg.get("ignore_idx", 0)
+
+    if criterion_type == "CrossEntropyLoss":
+        return torch.nn.CrossEntropyLoss(ignore_index=PAD_IDX)
+    else:
+        raise ValueError(f"Unsupported criterion type: {criterion_type}")
+
+
+def build_optimizer(cfg, model_or_params):
     optim_cfg = cfg.get("optimizer", {})
 
     # optimizer type (default is Adam)
@@ -32,10 +47,13 @@ def build_optimizer(cfg, model):
     # weight decay (default is 0)
     weight_decay = optim_cfg.get("weight_decay", 0)
 
+    # normalize parameters
+    params = model_or_params.parameters() if isinstance(model_or_params, nn.Module) else model_or_params
+
     if optimizer_type == "Adam":
-        return torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+        return torch.optim.Adam(params=params, lr=lr, weight_decay=weight_decay)
     elif optimizer_type == "SGD":
-        return torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
+        return torch.optim.SGD(params=params, lr=lr, weight_decay=weight_decay)
     else:
         raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
 

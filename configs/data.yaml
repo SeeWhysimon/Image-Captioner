@@ -2,15 +2,15 @@
 
 datasets:
   train:
-    image_dir: ./coco_10p/train
-    ann_path: ./coco_10p/annotations/captions_train2017.json
+    image_dir: "./coco_10p/train2017"
+    ann_path: "./coco_10p/annotations/captions_train2017.json"
 
   val:
-    image_dir: ./coco_10p/val
-    ann_path: ./coco_10p/annotations/captions_val2017.json
+    image_dir: "./coco_10p/val2017"
+    ann_path: "./coco_10p/annotations/captions_val2017.json"
 
   test:
-    image_dir: ./coco_10p/test
+    image_dir: "./coco_10p/test2017"
     ann_path: null
 
 transform:

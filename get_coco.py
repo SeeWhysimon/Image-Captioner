@@ -1,7 +1,7 @@
 import os
 import zipfile
 import requests
-from tqdm import tqdm  # 进度条工具
+from tqdm import tqdm
 
 # COCO 2017 数据集下载链接
 COCO_URLS = {
