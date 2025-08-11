@@ -5,7 +5,6 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 
-from scripts.utils import generate_captions
 
 class CaptionCollator:
     def __init__(self, vocab, padding_value):
@@ -18,6 +17,12 @@ class CaptionCollator:
         targets = [self.vocab.encode(c) for c in captions]
         targets = pad_sequence(targets, batch_first=True, padding_value=self.padding_value)
         return images, targets
+    
+def test_collate_fn(batch):
+    # batch: list of (image_tensor, image_path_str)
+    images, paths = zip(*batch)          # tuple of tensors, tuple of strs
+    images = torch.stack(images, dim=0)  # [B, C, H, W]
+    return images, list(paths)           
 
 
 def train_step(encoder,
@@ -116,29 +121,66 @@ def train(encoder,
     return history
 
 
+def inference(encoder, decoder, dataloader, vocab, max_len=20, device='cpu'):
+    encoder.eval(); decoder.eval()
+    results = []
+    with torch.no_grad():
+        for images, paths in dataloader:  # paths: list[str]
+            images = images.to(device)
+            B = images.size(0)
+
+            features = encoder(images)             # [B, E]
+            inputs = features.unsqueeze(1)         # [B, 1, E]
+            hidden = None
+
+            captions = [['<SOS>'] for _ in range(B)]
+            completed = [False] * B
+
+            for _ in range(max_len):
+                outputs, hidden = decoder.rnn(inputs, hidden)   # [B, 1, H]
+                logits = decoder.fc(outputs.squeeze(1))         # [B, V]
+                predicted = logits.argmax(dim=-1)               # [B]
+
+                for i in range(B):
+                    if not completed[i]:
+                        w = vocab.idx2word[predicted[i].item()]
+                        if w == '<EOS>':
+                            completed[i] = True
+                        else:
+                            captions[i].append(w)
+
+                if all(completed): break
+                inputs = decoder.embedding(predicted).unsqueeze(1)  # [B, 1, E]
+
+            # dropping <SOS>
+            finals = [' '.join(ws[1:]) for ws in captions]  
+
+            for i, cap in enumerate(finals):
+                results.append({"image": paths[i], "caption": cap})  
+    return results
+
+
 def evaluate_bleu(encoder, decoder, dataloader, vocab, device="cpu"):
     encoder.eval()
     decoder.eval()
 
+    pred_results = inference(encoder, decoder, dataloader, vocab, device=device)
+    pred_captions = [item["caption"] for item in pred_results]
+
     smoothie = SmoothingFunction().method4
     total_scores = {"BLEU-1": [], "BLEU-2": [], "BLEU-3": [], "BLEU-4": []}
 
+    idx = 0
     with torch.no_grad():
-        for images, captions_gt in dataloader:
-            images = images.to(device)
+        for _, captions_gt in dataloader:
+            for gt_tokens in captions_gt:
+                candidate = pred_captions[idx].split()
+                reference = [vocab.decode(gt_tokens).split()]
+                for n in range(1, 5):
+                    weights = tuple([1.0 / n] * n)  
+                    score = sentence_bleu(reference, candidate, weights=weights, smoothing_function=smoothie)
+                    total_scores[f"BLEU-{n}"].append(score)
+                idx += 1
 
-            # === Step 1: 生成预测句子（List[str]）
-            predicted_captions = generate_captions(encoder, decoder, images, vocab, device=device)
-
-            # === Step 2: 对每个样本计算 BLEU
-            for pred_sentence, gt_tokens in zip(predicted_captions, captions_gt):
-                candidate = pred_sentence.split()  
-                reference = [vocab.decode(gt_tokens).split()]  
-
-                for i in range(1, 5):
-                    weight = tuple([1/i] * i)  
-                    score = sentence_bleu(reference, candidate, weights=weight, smoothing_function=smoothie)
-                    total_scores[f"BLEU-{i}"].append(score)
-
-    final_scores = {k: sum(v) / len(v) if v else 0.0 for k, v in total_scores.items()}
+    final_scores = {k: (sum(v) / len(v) if v else 0.0) for k, v in total_scores.items()}
     return final_scores

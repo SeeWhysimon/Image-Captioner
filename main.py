@@ -3,7 +3,7 @@ import json
 import argparse
 import torch
 
-from scripts.utils import load_configs, load_checkpoint
+from scripts.utils import load_configs
 from scripts.pipeline import training_pipeline, testing_pipeline
 
 
@@ -17,7 +17,6 @@ def get_args():
 if __name__ == "__main__":
     args = get_args()
     
-    data_config = load_configs("configs/data.yaml")
     model_config = load_configs("configs/model.yaml")
 
     # select device
@@ -27,7 +26,6 @@ if __name__ == "__main__":
     if args.mode == "train":
         train_config = load_configs("configs/train.yaml")
         training_pipeline(train_config=train_config, 
-                          data_config=data_config, 
                           model_config=model_config, 
                           device=device)
 
@@ -37,7 +35,6 @@ if __name__ == "__main__":
         test_config = load_configs("configs/test.yaml")
         
         testing_pipeline(test_config=test_config, 
-                         data_config=data_config, 
                          model_config=model_config, 
                          device=device)
 
