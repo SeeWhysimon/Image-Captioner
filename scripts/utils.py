@@ -14,40 +14,6 @@ def create_new_exp_folder(base_dir="logs", mode=None):
     
     print(f"Experiment folder created: {new_exp_path}.")
     return new_exp_path
-
-
-def generate_captions(encoder, decoder, images, vocab, max_len=20, device='cpu'):
-    batch_size = images.size(0)
-    with torch.no_grad():
-        features = encoder(images)  # [batch_size, embed_size]
-        inputs = features.unsqueeze(1)  # [batch_size, 1, embed_size]
-        hidden = None
-        
-        # 初始化 captions（每个是 List[str]）
-        captions = [['<SOS>'] for _ in range(batch_size)]
-        completed = [False] * batch_size  # 是否已生成 <EOS>
-        
-        for _ in range(max_len):
-            outputs, hidden = decoder.rnn(inputs, hidden)  # [batch_size, 1, hidden_size]
-            logits = decoder.fc(outputs.squeeze(1))        # [batch_size, vocab_size]
-            predicted = logits.argmax(dim=-1)              # [batch_size]
-            
-            for i in range(batch_size):
-                if not completed[i]:
-                    word = vocab.idx2word[predicted[i].item()]
-                    if word == '<EOS>':
-                        completed[i] = True
-                    else:
-                        captions[i].append(word)
-            
-            if all(completed):
-                break
-            
-            inputs = decoder.embedding(predicted).unsqueeze(1)  # [batch_size, 1, embed_size]
-        
-        # 拼接输出，去掉 <SOS>
-        final_captions = [' '.join(words[1:]) for words in captions]
-        return final_captions
     
 
 def load_checkpoint(checkpoint_path, map_location=None):

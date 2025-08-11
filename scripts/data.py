@@ -12,12 +12,10 @@ class CocoDataset(Dataset):
         self.images = data['images']
         self.annotations = data['annotations']
 
-        # 建立 image_id -> caption 的映射（可能多个 caption）
         self.id2captions = {}
         for ann in self.annotations:
             self.id2captions.setdefault(ann['image_id'], []).append(ann['caption'])
 
-        # 扩展为每个 caption 都成为一个样本
         self.samples = []
         for img in self.images:
             img_path = os.path.join(image_dir, img['file_name'])
@@ -37,3 +35,22 @@ class CocoDataset(Dataset):
             image = self.transform(image)
         return image, caption
 
+
+class TestDataset(Dataset):
+    def __init__(self, image_paths, transform=None):
+        self.image_paths = image_paths
+        self.transform = transform
+
+
+    def __len__(self):
+        return len(self.image_paths)
+    
+
+    def __getitem__(self, index):
+        image_path = self.image_paths[index]
+        image = Image.open(image_path).convert('RGB')
+        
+        if self.transform:
+            image = self.transform(image)
+        
+        return image, image_path

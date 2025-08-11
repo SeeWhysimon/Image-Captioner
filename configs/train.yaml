@@ -1,9 +1,28 @@
 # train.yaml
 
-num_epochs: 10
-print_every: 1
-save_every: 5
 device: cuda  
+
+num_epochs: 50
+print_every: 1
+save_every: 10
+
+transform:
+  resize: [128, 128]
+  to_tensor: true
+  normalize:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+dataloader:
+  batch_size: 16
+  shuffle: true
+  num_workers: 4
+  pin_memory: true
+  padding_value: 0
+
+data:
+  image_dir: "./coco_10p/train2017"
+  ann_path: "./coco_10p/annotations/captions_train2017.json"
 
 optimizer:
   type: Adam
@@ -21,8 +40,8 @@ criterion:
 
 save_dir: ./logs
 
-checkpoint_path: D:/Image_Captioning_COCO/logs/train/20250809-205742/caption_model_10epochs.pth
-history_path: D:/Image_Captioning_COCO/logs/train/20250809-205742/history.json
+checkpoint_path: "D:/Image_Captioning_COCO/logs/train/20250811-095131/caption_model_20epochs.pth"
+history_path: "D:/Image_Captioning_COCO/logs/train/20250811-095131/history.json"
 
 misc:
   clip_grad_norm: 5
