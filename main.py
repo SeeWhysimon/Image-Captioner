@@ -4,7 +4,7 @@ import argparse
 import torch
 
 from scripts.utils import load_configs, load_checkpoint
-from scripts.pipeline import training_pipeline
+from scripts.pipeline import training_pipeline, testing_pipeline
 
 
 def get_args():
@@ -31,14 +31,15 @@ if __name__ == "__main__":
                           model_config=model_config, 
                           device=device)
 
+
+    # ============================ test mode ============================
     elif args.mode == "test":
         test_config = load_configs("configs/test.yaml")
         
-        if test_config["checkpoint"] is None:
-            print("No checkpoint file found.")
-
-        checkpoint = load_checkpoint(checkpoint_path=test_config["checkpoint"], 
-                                     map_location=device)
+        testing_pipeline(test_config=test_config, 
+                         data_config=data_config, 
+                         model_config=model_config, 
+                         device=device)
 
     else:
         print(f"Unsupported mode: {args.mode}.")

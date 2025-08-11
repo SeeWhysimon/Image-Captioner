@@ -100,3 +100,7 @@ def training_pipeline(train_config, data_config, model_config, device):
                         history=history)
         
     save_history(history=new_history, save_path=save_path)
+
+
+def testing_pipeline(test_config, data_config, model_config, device):
+    pass
