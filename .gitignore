@@ -2,3 +2,4 @@ logs/
 coco/
 coco_10p/
 **/__pycache__/
+.vs/
