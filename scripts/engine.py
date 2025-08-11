@@ -54,8 +54,8 @@ def train(encoder,
           decoder, 
           dataloader, 
           vocab, 
-          optimizer, 
           criterion, 
+          optimizer, 
           scheduler=None,
           num_epochs=5, 
           print_every=1, 
@@ -66,11 +66,6 @@ def train(encoder,
           clip_max_norm=5.0,
           device='cuda', 
           history=[]):
-    encoder.to(device)
-    decoder.to(device)
-    if hasattr(criterion, 'to'):
-        criterion.to(device)
-
     encoder.train()
     decoder.train()
     

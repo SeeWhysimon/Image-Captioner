@@ -78,12 +78,10 @@ def load_configs(*files):
     return config
 
 
-def load_history(save_path):
-    if save_path:
-        history_path = os.path.join(save_path, "history.json")
-        if os.path.exists(history_path):
-            with open(history_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+def load_history(history_path):
+    if history_path:
+        with open(history_path, "r", encoding="utf-8") as f:
+            return json.load(f)
     else:
         return []
 

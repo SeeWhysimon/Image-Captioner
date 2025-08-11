@@ -28,15 +28,17 @@ if __name__ == "__main__":
     data_config = load_configs("configs/data.yaml")
     model_config = load_configs("configs/model.yaml")
 
+    # select device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # ============================ train mode ============================
     if args.mode == "train":
-        # select device
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
         # load training configs
         train_config = load_configs("configs/train.yaml")
         
         # build vocabulary and dataset
+        torch.serialization.add_safe_globals([Vocabulary])
+
         with open(data_config["datasets"]["train"]["ann_path"], "r") as f:
             data = json.load(f)
         train_captions = [ann["caption"] for ann in data["annotations"]]
@@ -69,11 +71,11 @@ if __name__ == "__main__":
         decoder = RNNDecoder(embed_size=model_config["decoder"]["embed_size"], 
                              hidden_size=model_config["decoder"]["hidden_size"], 
                              vocab_size=len(vocab), 
-                             num_layers=model_config["decoder"]["num_layers"])
+                             num_layers=model_config["decoder"]["num_layers"]).to(device)
         
         if train_config["checkpoint_path"]:
-            encoder.load_state_dict(checkpoint["encoder"])
-            decoder.load_state_dict(checkpoint["decoder"])
+            encoder.load_state_dict(checkpoint["encoder_state_dict"])
+            decoder.load_state_dict(checkpoint["decoder_state_dict"])
 
         trainable_params = list(filter(lambda p: p.requires_grad, 
                                        chain(encoder.parameters(), decoder.parameters())))
@@ -85,13 +87,13 @@ if __name__ == "__main__":
                                             optimizer=optimizer)
         
         if train_config["checkpoint_path"]:
-            optimizer.load_state_dict(checkpoint["optimizer"])
-            scheduler.load_state_dict(checkpoint["scheduler"])
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         
         history = load_history(train_config["history_path"])
 
         # prepare save folder
-        start_epoch = checkpoint["epoch"] if train_config["checkpoint_path"] else 0
+        start_epoch = checkpoint["start_epoch"] if train_config["checkpoint_path"] else 0
 
         save_path = create_new_exp_folder(base_dir=train_config["save_dir"], 
                                           mode=args.mode)
@@ -101,8 +103,8 @@ if __name__ == "__main__":
                             decoder=decoder, 
                             dataloader=train_loader, 
                             vocab=vocab, 
-                            optimizer=optimizer, 
                             criterion=criterion, 
+                            optimizer=optimizer, 
                             scheduler=scheduler, 
                             num_epochs=train_config["num_epochs"], 
                             print_every=train_config["print_every"], 
@@ -117,7 +119,13 @@ if __name__ == "__main__":
         save_history(history=new_history, save_path=save_path)
 
     elif args.mode == "test":
-        pass
+        test_config = load_configs("configs/test.yaml")
+        
+        if test_config["checkpoint"] is None:
+            print("No checkpoint file found.")
+
+        checkpoint = load_checkpoint(checkpoint_path=test_config["checkpoint"], 
+                                     map_location=device)
 
     else:
         print(f"Unsupported mode: {args.mode}.")

@@ -21,8 +21,8 @@ criterion:
 
 save_dir: ./logs
 
-checkpoint_path: null
-history_path: null
+checkpoint_path: D:/Image_Captioning_COCO/logs/train/20250809-205742/caption_model_10epochs.pth
+history_path: D:/Image_Captioning_COCO/logs/train/20250809-205742/history.json
 
 misc:
   clip_grad_norm: 5
