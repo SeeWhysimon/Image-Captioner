@@ -1,4 +1,5 @@
-checkpoint_path: "D:/Image_Captioning_COCO/logs/train/20250811-095131/caption_model_20epochs.pth"
+# test.yaml
+checkpoint_path: "D:/Image_Captioning_COCO/logs/train/20250811-162536/caption_model_70epochs.pth"
 
 save_dir: "./logs"
 

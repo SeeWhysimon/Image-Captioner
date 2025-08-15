@@ -1,0 +1,22 @@
+# val.yaml
+transform:
+  resize: [128, 128]
+  to_tensor: true
+  normalize:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+dataloader:
+  batch_size: 16
+  shuffle: true
+  num_workers: 4
+  pin_memory: true
+  padding_value: 0
+
+data:
+  image_dir: "./coco_10p/val2017"
+  ann_path: "./coco_10p/annotations/captions_val2017.json"
+
+save_dir: ./logs
+
+checkpoint_path: "D:/Image_Captioning_COCO/logs/train/20250811-162536/caption_model_70epochs.pth"
