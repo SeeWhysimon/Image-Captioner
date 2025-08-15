@@ -1,10 +1,8 @@
-import os
-import json
 import argparse
 import torch
 
 from scripts.utils import load_configs
-from scripts.pipeline import training_pipeline, testing_pipeline
+from scripts.pipeline import training_pipeline, testing_pipeline, eval_pipeline
 
 
 def get_args():
@@ -33,10 +31,16 @@ if __name__ == "__main__":
     # ============================ test mode ============================
     elif args.mode == "test":
         test_config = load_configs("configs/test.yaml")
-        
         testing_pipeline(test_config=test_config, 
                          model_config=model_config, 
                          device=device)
+    
+    # ============================ eval mode ============================
+    elif args.mode == "eval":
+        eval_config = load_configs("configs/eval.yaml")
+        eval_pipeline(val_config=eval_config, 
+                      model_config=model_config, 
+                      device=device)
 
     else:
         print(f"Unsupported mode: {args.mode}.")

@@ -3,7 +3,7 @@ import json
 from PIL import Image
 from torch.utils.data import Dataset
 
-class CocoDataset(Dataset):
+class TrainDataset(Dataset):
     def __init__(self, image_dir, ann_path, transform=None):
         self.image_dir = image_dir
         self.transform = transform
@@ -33,10 +33,10 @@ class CocoDataset(Dataset):
         image = Image.open(img_path).convert('RGB')
         if self.transform:
             image = self.transform(image)
-        return image, caption
+        return image, caption, img_path
 
 
-class TestDataset(Dataset):
+class InferenceDataset(Dataset):
     def __init__(self, image_paths, transform=None):
         self.image_paths = image_paths
         self.transform = transform

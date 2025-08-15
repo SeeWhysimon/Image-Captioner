@@ -12,12 +12,13 @@ class CaptionCollator:
         self.padding_value = padding_value
 
     def __call__(self, batch):
-        images, captions = zip(*batch)
+        images, captions, image_paths = zip(*batch)
         images = torch.stack(images)
         targets = [self.vocab.encode(c) for c in captions]
         targets = pad_sequence(targets, batch_first=True, padding_value=self.padding_value)
-        return images, targets
+        return images, targets, image_paths
     
+
 def test_collate_fn(batch):
     # batch: list of (image_tensor, image_path_str)
     images, paths = zip(*batch)          # tuple of tensors, tuple of strs
@@ -27,14 +28,14 @@ def test_collate_fn(batch):
 
 def train_step(encoder,
                decoder,
-               batch, # (imgs, caps)
+               batch, # (imgs, caps, img_paths)
                vocab,
                optimizer,
                criterion,
                device='cpu',
                clip_params=None, 
                clip_max_norm=5.0): 
-    imgs, caps = batch
+    imgs, caps, _ = batch
     imgs, caps = imgs.to(device), caps.to(device)
 
     # forward
@@ -74,7 +75,7 @@ def train(encoder,
     encoder.train()
     decoder.train()
     
-    print(f"Training on {device}...")
+    print(f"[INFO] Training on {device}...")
     for epoch in range(start_epoch, start_epoch + num_epochs):
         total_loss = 0.0
 
@@ -160,27 +161,66 @@ def inference(encoder, decoder, dataloader, vocab, max_len=20, device='cpu'):
     return results
 
 
-def evaluate_bleu(encoder, decoder, dataloader, vocab, device="cpu"):
+def evaluate_bleu(encoder, decoder, dataloader, vocab, max_len=20, device="cpu"):
     encoder.eval()
     decoder.eval()
 
-    pred_results = inference(encoder, decoder, dataloader, vocab, device=device)
-    pred_captions = [item["caption"] for item in pred_results]
-
     smoothie = SmoothingFunction().method4
-    total_scores = {"BLEU-1": [], "BLEU-2": [], "BLEU-3": [], "BLEU-4": []}
+    results = []
 
-    idx = 0
     with torch.no_grad():
-        for _, captions_gt in dataloader:
-            for gt_tokens in captions_gt:
-                candidate = pred_captions[idx].split()
-                reference = [vocab.decode(gt_tokens).split()]
-                for n in range(1, 5):
-                    weights = tuple([1.0 / n] * n)  
-                    score = sentence_bleu(reference, candidate, weights=weights, smoothing_function=smoothie)
-                    total_scores[f"BLEU-{n}"].append(score)
-                idx += 1
+        for images, captions_gt, image_paths in dataloader:  
+            images = images.to(device)
+            B = images.size(0)
 
-    final_scores = {k: (sum(v) / len(v) if v else 0.0) for k, v in total_scores.items()}
-    return final_scores
+            features = encoder(images)              # [B, E]
+            inputs = features.unsqueeze(1)          # [B, 1, E]
+            hidden = None
+
+            captions = [['<SOS>'] for _ in range(B)]
+            completed = [False] * B
+
+            for _ in range(max_len):
+                outputs, hidden = decoder.rnn(inputs, hidden)   # [B, 1, H]
+                logits = decoder.fc(outputs.squeeze(1))         # [B, V]
+                predicted = logits.argmax(dim=-1)               # [B]
+
+                for i in range(B):
+                    if not completed[i]:
+                        w = vocab.idx2word[predicted[i].item()]
+                        if w == '<EOS>':
+                            completed[i] = True
+                        else:
+                            captions[i].append(w)
+
+                if all(completed):
+                    break
+
+                inputs = decoder.embedding(predicted).unsqueeze(1)  # [B, 1, E]
+
+            pred_texts = [' '.join(ws[1:]) for ws in captions]
+
+            for b in range(B):
+                reference_text = ' '.join(vocab.decode(captions_gt[b]).split()[1:-1])  
+                candidate_text = pred_texts[b]
+
+                candidate = candidate_text.split()
+                reference = [reference_text.split()]
+
+                per_n_scores = []
+                scores = {}
+                scores["image"] = image_paths[b]    
+                scores["reference"] = reference_text
+                scores["prediction"] = candidate_text
+                
+                for n in range(1, 5):
+                    weights = tuple([1.0 / n] * n)
+                    sc = sentence_bleu(reference, candidate, weights=weights, smoothing_function=smoothie)
+                    scores[f"BLEU-{n}"] = float(sc)
+                    per_n_scores.append(sc)
+
+                scores["total"] = float(sum(per_n_scores) / 4.0)
+
+                results.append(scores)
+
+    return results

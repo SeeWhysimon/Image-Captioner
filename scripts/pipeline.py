@@ -7,10 +7,13 @@ from torch.utils.data import DataLoader
 from glob import glob
 
 from scripts import builder
-from scripts.data import CocoDataset, TestDataset
+from scripts.data import TrainDataset, InferenceDataset
 from scripts.model import CNNEncoder, RNNDecoder
-from scripts.engine import CaptionCollator, train, inference, test_collate_fn
 from scripts.vocabulary import Vocabulary
+from scripts.engine import (CaptionCollator, 
+                            train, inference, 
+                            test_collate_fn, 
+                            evaluate_bleu)
 from scripts.utils import (load_configs, 
                            load_checkpoint, 
                            load_history, 
@@ -42,7 +45,7 @@ def training_pipeline(train_config, model_config, device):
                                padding_value=train_config["dataloader"]["padding_value"])
         
     transform = builder.build_transform(train_config["transform"])
-    train_set = CocoDataset(image_dir=train_config["data"]["image_dir"], 
+    train_set = TrainDataset(image_dir=train_config["data"]["image_dir"], 
                             ann_path=train_config["data"]["ann_path"], 
                             transform=transform)
     train_loader = DataLoader(dataset=train_set, 
@@ -113,7 +116,7 @@ def testing_pipeline(test_config, model_config, device):
         raise ValueError("Checkpoint path must be provided for testing.")
     
     if test_config["data"]["image_dir"] is None:
-        raise ValueError("Image directory must be provided for testing.")
+        raise ValueError("[Error] Image directory must be provided for testing.")
     
     # loading checkpoint
     torch.serialization.add_safe_globals([Vocabulary])
@@ -128,7 +131,7 @@ def testing_pipeline(test_config, model_config, device):
     test_image_paths = glob(os.path.join(test_image_dir, "*.jpg")) + \
                        glob(os.path.join(test_image_dir, "*.png"))
     transform = builder.build_transform(test_config["transform"])
-    test_set = TestDataset(image_paths=test_image_paths, 
+    test_set = InferenceDataset(image_paths=test_image_paths, 
                            transform=transform)
     test_loader = DataLoader(dataset=test_set, 
                               batch_size=test_config["dataloader"]["batch_size"], 
@@ -162,3 +165,60 @@ def testing_pipeline(test_config, model_config, device):
         json.dump(results, f, indent=4, ensure_ascii=False)
 
     print(f"[INFO] Test finished. Results saved to {exp_dir}")
+
+
+def eval_pipeline(val_config, model_config, device):
+    if val_config["checkpoint_path"] is None:
+        raise ValueError("Checkpoint path must be provided for validation.")
+    
+    if val_config["data"]["image_dir"] is None:
+        raise ValueError("[Error] Image directory must be provided for validation.")
+    
+    # loading checkpoint
+    torch.serialization.add_safe_globals([Vocabulary])
+    checkpoint = load_checkpoint(checkpoint_path=val_config["checkpoint_path"],
+                                 map_location=device)
+    
+    # building vocabulary
+    vocab = checkpoint["vocab"]
+
+    # building validation dataloader
+    collator = CaptionCollator(vocab=vocab, 
+                               padding_value=val_config["dataloader"]["padding_value"])
+        
+    transform = builder.build_transform(val_config["transform"])
+    val_set = TrainDataset(image_dir=val_config["data"]["image_dir"], 
+                           ann_path=val_config["data"]["ann_path"], 
+                           transform=transform)
+    val_loader = DataLoader(dataset=val_set, 
+                            batch_size=val_config["dataloader"]["batch_size"], 
+                            shuffle=val_config["dataloader"]["shuffle"], 
+                            num_workers=val_config["dataloader"]["num_workers"], 
+                            collate_fn=collator, 
+                            pin_memory=val_config["dataloader"]["pin_memory"])
+    
+    # building models
+    encoder = CNNEncoder(embed_size=model_config["encoder"]["embed_size"],
+                         backbone=model_config["encoder"]["backbone"]["type"]).to(device)
+    decoder = RNNDecoder(vocab_size=len(vocab),
+                         embed_size=model_config["decoder"]["embed_size"],
+                         hidden_size=model_config["decoder"]["hidden_size"],
+                         num_layers=model_config["decoder"]["num_layers"]).to(device)
+    encoder.load_state_dict(checkpoint["encoder_state_dict"])
+    decoder.load_state_dict(checkpoint["decoder_state_dict"])
+
+    encoder.eval()
+    decoder.eval()
+
+    # evaluating on bleu
+    results = evaluate_bleu(encoder, decoder, val_loader, vocab, device=device)
+
+    # storing results
+    exp_dir = create_new_exp_folder(val_config["save_dir"], mode="eval")
+    checkpoint_name = val_config["checkpoint_path"].split("/")[-1].split(".")[0]
+    results_save_path = os.path.join(exp_dir, f"{checkpoint_name}_captions.json")
+
+    with open(results_save_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=4, ensure_ascii=False)
+
+    print(f"[INFO] Validation finished. Results saved to {exp_dir}")
