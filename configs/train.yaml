@@ -1,7 +1,7 @@
 # train.yaml
-num_epochs: 10
+num_epochs: 50
 print_every: 1
-save_every: 2
+save_every: 10
 
 transform:
   resize: [128, 128]
@@ -37,8 +37,8 @@ criterion:
 
 save_dir: ./logs
 
-checkpoint_path: "D:/Image_Captioning_COCO/logs/train/20250811-162536/caption_model_70epochs.pth"
-history_path: "D:/Image_Captioning_COCO/logs/train/20250811-162536/history.json"
+checkpoint_path: null
+history_path: null
 
 misc:
   clip_grad_norm: 5

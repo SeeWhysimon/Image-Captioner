@@ -19,4 +19,4 @@ data:
 
 save_dir: ./logs
 
-checkpoint_path: "D:/Image_Captioning_COCO/logs/train/20250811-162536/caption_model_70epochs.pth"
+checkpoint_path: "D:/Image_Captioning_COCO/logs/train/20250818-112804/caption_model_50epochs.pth"

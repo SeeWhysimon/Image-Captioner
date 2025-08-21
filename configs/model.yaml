@@ -1,7 +1,7 @@
 encoder:
   embed_size: 256
   backbone:
-    type: "resnet18"
+    type: "resnet34"
     pretrained: true
   
 decoder:
