@@ -113,7 +113,7 @@ def training_pipeline(train_config, model_config, device):
 
 def testing_pipeline(test_config, model_config, device):
     if test_config["checkpoint_path"] is None:
-        raise ValueError("Checkpoint path must be provided for testing.")
+        raise ValueError("[ERROR] Checkpoint path must be provided for testing.")
     
     if test_config["data"]["image_dir"] is None:
         raise ValueError("[Error] Image directory must be provided for testing.")

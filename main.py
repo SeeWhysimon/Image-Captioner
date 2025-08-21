@@ -34,6 +34,7 @@ if __name__ == "__main__":
         testing_pipeline(test_config=test_config, 
                          model_config=model_config, 
                          device=device)
+                         
     
     # ============================ eval mode ============================
     elif args.mode == "eval":

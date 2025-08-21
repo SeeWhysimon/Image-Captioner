@@ -15,7 +15,7 @@ class CNNEncoder(nn.Module):
             base = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
             self.feature_dim = 2048
         else:
-            raise ValueError(f"Unsupported backbone: {backbone}")
+            raise ValueError(f"[Error] Unsupported backbone: {backbone}")
         
         for param in base.parameters():
             param.requires_grad = False

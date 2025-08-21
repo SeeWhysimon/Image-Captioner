@@ -117,7 +117,7 @@ def train(encoder,
                 "scheduler": scheduler.state_dict() if scheduler else None,
                 "vocab": vocab
             }, model_name)
-            print(f"Model saved as {model_name}.")
+            print(f"[INFO] Model saved as {model_name}.")
 
     return history
 

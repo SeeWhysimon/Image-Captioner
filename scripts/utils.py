@@ -12,7 +12,7 @@ def create_new_exp_folder(base_dir="logs", mode=None):
     new_exp_path = os.path.join(base_dir, mode, timestamp)
     os.makedirs(new_exp_path)
     
-    print(f"Experiment folder created: {new_exp_path}.")
+    print(f"[INFO] Experiment folder created: {new_exp_path}.")
     return new_exp_path
     
 
